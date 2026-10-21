@@ -14,7 +14,7 @@ VRAM_Zero/
 │   └── vram_zero_popart.png   Illustration pop-art (affichee dans "A propos")
 ├── Lancer VRAM Zero.bat       Lance l'application depuis les sources (Python requis)
 ├── RECREER_EXE.bat            Reconstruit l'EXE dans dist\
-├── installer/VRAM_Zero.iss    Script Inno Setup pret a compiler (voir GUIDE_INNO_SETUP.md)`r`n├── GUIDE_INNO_SETUP.md        Guide pas a pas pour creer l'installeur`r`n├── LICENSE                    Licence MIT
+├── installer/VRAM_Zero.iss    Script Inno Setup pret a compiler (voir GUIDE_INNO_SETUP.md)`r`n├── GUIDE_INNO_SETUP.md        Guide pas a pas pour creer l'installeur`r`n├── .github/workflows/build.yml  Compilation automatique (GitHub Actions)`r`n├── LICENSE                    Licence MIT`r`n├── GUIDE_PUBLICATION.md       Publication GitHub, antivirus, signature du code
 └── README.md
 ```
 
@@ -54,4 +54,6 @@ Les faux positifs sont frequents avec les EXE crees par PyInstaller.
 ## Licence
 
 MIT — voir `LICENSE`.
+
+
 

@@ -1,0 +1,56 @@
+﻿name: Build VRAM Zero
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build EXE (PyInstaller)
+        shell: cmd
+        run: RECREER_EXE.bat
+
+      - name: Build installer (Inno Setup)
+        shell: pwsh
+        run: |
+          $iscc = (Get-Command iscc -ErrorAction SilentlyContinue).Source
+          if (-not $iscc) { $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress; $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
+          & $iscc installer\VRAM_Zero.iss
+
+      - name: SHA-256
+        shell: pwsh
+        run: Get-FileHash installer\Output\*.exe -Algorithm SHA256 | Format-List
+
+      - name: Upload unsigned installer
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: VRAM-Zero-installer-unsigned
+          path: installer/Output/*.exe
+
+      # --- Signature SignPath Foundation : a activer apres acceptation du projet ---
+      # Remplacer ORGANIZATION_ID, puis creer le secret SIGNPATH_API_TOKEN dans
+      # GitHub > Settings > Secrets and variables > Actions.
+      #
+      # - uses: signpath/github-action-submit-signing-request@v1
+      #   with:
+      #     api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+      #     organization-id: ORGANIZATION_ID
+      #     project-slug: vram-zero
+      #     signing-policy-slug: release-signing
+      #     github-artifact-id: ${{ steps.upload.outputs.artifact-id }}
+      #     wait-for-completion: true
+      #     output-artifact-directory: signed

@@ -20,6 +20,18 @@ OutputBaseFilename=VRAM_Zero_Setup_{#AppVersion}
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+WizardImageFile=..\assets\wizard_large.bmp
+WizardSmallImageFile=..\assets\wizard_small.bmp
+AppPublisherURL=https://github.com/graphixxgeek-boop/VRAM-Zero-by-MEXAGORA
+AppSupportURL=https://github.com/graphixxgeek-boop/VRAM-Zero-by-MEXAGORA/issues
+VersionInfoVersion={#AppVersion}.0.0
+VersionInfoCompany={#AppPublisher}
+VersionInfoDescription={#AppName} - installeur
+VersionInfoProductName={#AppName}
+VersionInfoCopyright=Copyright (c) 2026 MEXAGORA
+; Signature du code (a activer une fois le certificat obtenu, voir GUIDE_PUBLICATION.md) :
+; SignTool=signtool
+; SignedUninstaller=yes
 PrivilegesRequired=admin
 ArchitecturesInstallIn64BitMode=x64compatible
 
@@ -39,3 +51,4 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopico
 
 [Run]
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
+

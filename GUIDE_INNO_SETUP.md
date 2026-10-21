@@ -1,4 +1,4 @@
-# Guide Inno Setup — créer l'installeur de VRAM Zero
+﻿# Guide Inno Setup — créer l'installeur de VRAM Zero
 
 Objectif : obtenir un seul fichier, `VRAM_Zero_Setup_2.0.exe`, qui installe VRAM Zero
 (raccourcis, désinstallation, licence) sur n'importe quel PC Windows.
@@ -62,24 +62,22 @@ Après modification : **F9** pour recompiler.
 
 ---
 
-## Option : ajouter l'illustration pop-art dans l'assistant
+## Images de l'assistant (déjà faites et activées)
 
-L'assistant Inno n'accepte que des images **.bmp**, pas des .ico.
+L'assistant d'installation affiche **deux** images :
 
-1. Ouvrez `assets\vram_zero_popart.png` dans Paint (ou un autre logiciel de dessin).
-2. Redimensionnez-le (grande image de gauche : **164 × 314 px** ; petite image en haut à droite : **55 × 55 px**).
-3. Enregistrez-le en **.bmp** dans `assets\` (par exemple `popart_large.bmp`).
-4. Dans la section `[Setup]` du script, ajoutez :
+- **L'image « large »** : le grand panneau vertical à **gauche** des pages de bienvenue et de fin
+  (fichier `assets\wizard_large.bmp`, 164 × 314 px).
+- **L'image « petite »** : le petit carré en **haut à droite** des pages intermédiaires
+  (licence, dossier, installation) (fichier `assets\wizard_small.bmp`, 55 × 55 px).
 
-```
-WizardImageFile=..\assets\popart_large.bmp
-WizardSmallImageFile=..\assets\popart_small.bmp
-```
+Les deux sont déjà générées à partir de l'illustration pop-art, et le script les utilise
+(lignes `WizardImageFile` et `WizardSmallImageFile`). **Vous n'avez rien à faire.**
 
-5. **F9** pour recompiler.
+Pour changer l'illustration : ouvrez le fichier .bmp dans Paint, collez votre image à la bonne taille,
+enregistrez en **BMP** (pas en PNG ni en ICO) au même nom, puis **F9**.
 
 ---
-
 ## Tester l'installeur
 
 1. Double-cliquez sur `installer\Output\VRAM_Zero_Setup_2.0.exe`.
@@ -110,3 +108,4 @@ Idéalement, testez sur un autre PC ou une machine virtuelle sans Python : c'est
 3. Changer `AppVersion` dans `installer\VRAM_Zero.iss`.
 4. Ouvrir le `.iss` dans Inno Setup, puis **F9**.
 5. Diffuser `installer\Output\VRAM_Zero_Setup_<version>.exe` (par exemple en « Release » sur GitHub).
+
