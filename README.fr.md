@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/vram_zero_popart.png" alt="VRAM Zero" width="160">
+<img src="docs/images/illustration-VRAM-Zero.png" alt="VRAM Zero" width="220">
 
 # VRAM Zero
 
@@ -44,7 +44,7 @@ VRAM Zero affiche ce qui occupe la mémoire de votre GPU, distingue les outils d
 
 **Prérequis :** Windows 10 ou 11 (64 bits), une carte NVIDIA avec son pilote installé (fournit `nvidia-smi`).
 
-> **winget :** une soumission de paquet est prévue. Cette page sera mise à jour à sa disponibilité.
+> **winget :** un paquet a été soumis ([pull request](https://github.com/microsoft/winget-pkgs/pull/458325)). Une fois accepté, il s'installera avec `winget install MEXAGORA.VRAMZero`.
 
 ### Vérifier le téléchargement
 

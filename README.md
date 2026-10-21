@@ -1,6 +1,6 @@
-﻿<div align="center">
+<div align="center">
 
-<img src="assets/vram_zero_popart.png" alt="VRAM Zero" width="160">
+<img src="docs/images/illustration-VRAM-Zero.png" alt="VRAM Zero" width="220">
 
 # VRAM Zero
 
@@ -44,7 +44,7 @@ VRAM Zero shows what uses your GPU memory, tells local AI tools apart from every
 
 **Requirements:** Windows 10 or 11 (64-bit), an NVIDIA GPU with its driver installed (provides `nvidia-smi`).
 
-> **winget:** a package submission is planned. This page will be updated when it is available.
+> **winget:** a package has been submitted ([pull request](https://github.com/microsoft/winget-pkgs/pull/458325)). Once accepted it will be installable with `winget install MEXAGORA.VRAMZero`.
 
 ### Verify the download
 
