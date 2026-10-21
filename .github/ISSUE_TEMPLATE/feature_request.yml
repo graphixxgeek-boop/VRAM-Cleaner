@@ -1,0 +1,19 @@
+﻿name: Feature request
+description: Suggest an improvement or an application to add to the local AI list
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What situation do you want to handle?
+    validations:
+      required: true
+  - type: input
+    id: exe
+    attributes:
+      label: Executable name (if you request a new AI tool)
+      placeholder: "koboldcpp.exe"
+  - type: textarea
+    id: idea
+    attributes:
+      label: Proposed solution

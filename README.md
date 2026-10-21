@@ -1,59 +1,98 @@
-﻿# VRAM Zero v2.0 — by MEXAGORA
+﻿<div align="center">
 
-Surveillance et liberation de la VRAM NVIDIA (modeles IA locaux, applications gourmandes).
+<img src="assets/vram_zero_popart.png" alt="VRAM Zero" width="160">
 
-## Contenu du dossier
+# VRAM Zero
+
+**Monitor NVIDIA GPU memory and free it by closing the processes that hold it, built for people who run AI models locally.**
+
+[![Latest release](https://img.shields.io/github/v/release/graphixxgeek-boop/VRAM-Zero-by-MEXAGORA?label=release)](https://github.com/graphixxgeek-boop/VRAM-Zero-by-MEXAGORA/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![Platform: Windows](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-lightgrey)
+![GPU: NVIDIA](https://img.shields.io/badge/GPU-NVIDIA-76b900)
+
+[**Download**](https://github.com/graphixxgeek-boop/VRAM-Zero-by-MEXAGORA/releases/latest) · [Français](README.fr.md) · [Report a bug](https://github.com/graphixxgeek-boop/VRAM-Zero-by-MEXAGORA/issues/new/choose)
+
+</div>
+
+<p align="center">
+  <img src="docs/images/screenshot-main.png" alt="VRAM Zero main window (sample data)" width="720"><br>
+  <sub>Screenshot with sample data.</sub>
+</p>
+
+## Why
+
+Running Ollama, ComfyUI, LM Studio or a Stable Diffusion UI often leaves VRAM occupied after you are done: a model stays loaded, a Python process lingers, and the next job runs out of memory. Finding the culprit means reading `nvidia-smi` output and killing processes by hand.
+
+VRAM Zero shows what uses your GPU memory, tells local AI tools apart from everything else, and lets you close the ones you choose, after confirmation.
+
+## Features
+
+- Live VRAM and GPU utilisation, refreshed every 3 seconds, across one or several NVIDIA GPUs
+- Processes sorted into three levels:
+  - **Local AI** (green): Ollama, ComfyUI, LM Studio, llama.cpp, KoboldCpp, Stable Diffusion UIs, and similar
+  - **Non-essential** (orange): browsers, launchers, chat apps, creative tools
+  - **Critical** (red): Windows and driver components, hidden by default
+- One-click actions: close the selection, close all local AI processes, or close everything visible
+- Confirmation before every termination, with an extra warning for critical processes
+- Copy a plain-text report of the current state to the clipboard
+- No network access, no telemetry, nothing written to disk
+
+## Install
+
+**Installer (recommended):** download `VRAM_Zero_Setup_2.0.exe` from the [latest release](https://github.com/graphixxgeek-boop/VRAM-Zero-by-MEXAGORA/releases/latest) and run it.
+
+**Requirements:** Windows 10 or 11 (64-bit), an NVIDIA GPU with its driver installed (provides `nvidia-smi`).
+
+> **winget:** a package submission is planned. This page will be updated when it is available.
+
+### Verify the download
+
+The SHA-256 of each release file is listed in the release notes. In PowerShell:
+
+```powershell
+Get-FileHash .\VRAM_Zero_Setup_2.0.exe -Algorithm SHA256
+```
+
+### About antivirus alerts
+
+The files are **not yet code-signed**. A signing request has been submitted to the SignPath Foundation. Until then, some antivirus products may flag the program. The application is packaged with PyInstaller and can terminate processes, two traits that commonly trigger heuristic false positives.
+
+VirusTotal results for release 2.0 are published in [`docs/virustotal`](docs/virustotal/): 2 of 69 engines for the installer and 4 of 70 for the executable, none of them Microsoft, Avast, AVG, Kaspersky, ESET or BitDefender.
+
+Everything is built from this repository by [GitHub Actions](.github/workflows/build.yml). You can also read the source or build it yourself.
+
+## Build from source
+
+Requires Python 3 with Tkinter (included in the standard Windows installer). No third-party dependency.
+
+```powershell
+python src\vram_zero.pyw          # run from source
+.\RECREER_EXE.bat                 # build dist\VRAM Zero\VRAM Zero.exe with PyInstaller
+```
+
+To build the installer, open `installer\VRAM_Zero.iss` in [Inno Setup](https://jrsoftware.org/isinfo.php) and compile. See [docs/GUIDE_INNO_SETUP.md](docs/GUIDE_INNO_SETUP.md).
+
+## Good to know
+
+- Data comes from `nvidia-smi`. On Windows, the driver does not always report per-process VRAM (WDDM), so some rows show `N/A`. The global figures at the top stay accurate.
+- Only processes reported by `nvidia-smi --query-compute-apps` are listed. Some graphics-only applications may not appear.
+- Terminating a process is immediate and unsaved data is lost. Terminating system processes can destabilise Windows, which is why they are hidden by default.
+
+## Project layout
 
 ```
-VRAM_Zero/
-├── dist/VRAM Zero/            EXE pret a l'emploi (VRAM Zero.exe + _internal) -> a packager avec Inno Setup
-├── src/vram_zero.pyw          Code source (Python 3, Tkinter, aucune dependance externe)
-├── assets/
-│   ├── vram_zero.ico          Icone de l'application (fenetre, EXE, installeur)
-│   ├── vram_zero_popart.ico   Illustration pop-art (version ico)
-│   └── vram_zero_popart.png   Illustration pop-art (affichee dans "A propos")
-├── Lancer VRAM Zero.bat       Lance l'application depuis les sources (Python requis)
-├── RECREER_EXE.bat            Reconstruit l'EXE dans dist\
-├── installer/VRAM_Zero.iss    Script Inno Setup pret a compiler (voir GUIDE_INNO_SETUP.md)`r`n├── GUIDE_INNO_SETUP.md        Guide pas a pas pour creer l'installeur`r`n├── .github/workflows/build.yml  Compilation automatique (GitHub Actions)`r`n├── LICENSE                    Licence MIT`r`n├── GUIDE_PUBLICATION.md       Publication GitHub, antivirus, signature du code
-└── README.md
+src/            application source (vram_zero.pyw)
+assets/         icons and images
+installer/      Inno Setup script
+docs/           guides, VirusTotal reports, images
+packaging/      winget manifests
 ```
 
-## Lancer
+## Contributing
 
-- **EXE** : `dist\VRAM Zero\VRAM Zero.exe`
-- **Sources** : double-clic sur `Lancer VRAM Zero.bat` (Python 3 dans le PATH)
+Bug reports and ideas are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md). Security issues: see [SECURITY.md](SECURITY.md).
 
-## Reinstaller l'EXE (supprime ou mis en quarantaine par Avast ou un autre antivirus)
+## License
 
-Double-cliquez sur **`RECREER_EXE.bat`**, ou depuis un terminal dans ce dossier :
-
-```
-RECREER_EXE.bat
-```
-
-Le script installe PyInstaller si besoin (Internet requis la premiere fois), reconstruit
-`dist\VRAM Zero\VRAM Zero.exe` et signale si l'antivirus l'a supprime juste apres.
-
-Si Avast le supprime a nouveau : ajoutez ce dossier aux **exclusions** d'Avast
-(Menu > Parametres > General > Exceptions), puis relancez `RECREER_EXE.bat`.
-Les faux positifs sont frequents avec les EXE crees par PyInstaller.
-
-## Pour Inno Setup
-
-- Dossier a embarquer : tout le contenu de `dist\VRAM Zero\` (EXE **et** `_internal`).
-- Icone de l'installeur / du raccourci : `assets\vram_zero.ico`.
-- Illustration pour l'assistant d'installation : `assets\vram_zero_popart.ico` / `.png`.
-- Licence a afficher : `LICENSE`.
-
-## Notes
-
-- Necessite un GPU NVIDIA et `nvidia-smi` (installe avec les pilotes).
-- Sous Windows, le pilote n'expose pas toujours la VRAM par processus (valeurs N/A) :
-  les statistiques globales restent fiables.
-
-## Licence
-
-MIT — voir `LICENSE`.
-
-
-
+[MIT](LICENSE) © 2026 MEXAGORA
