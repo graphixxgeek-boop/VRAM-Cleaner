@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-VRAM Cleaner — by CycleBlue
----------------------------
+VRAM Zero — by MEXAGORA
+-----------------------
 Utility for monitoring and releasing NVIDIA GPU memory (VRAM)
 used by local AI models and other applications.
 
 License: MIT License
-Copyright (c) 2026 CycleBlue
+Copyright (c) 2026 MEXAGORA
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -31,12 +31,20 @@ SOFTWARE.
 import subprocess
 import sys
 import os
+import re
+import queue
+import threading
 import tkinter as tk
 from tkinter import ttk, messagebox
 from datetime import datetime
 
-VERSION = "1.3"
+APP_NAME = "VRAM Zero"
+VERSION = "2.0"
+AUTHOR = "MEXAGORA"
 AUTO_REFRESH_MS = 3000
+
+# Evite le clignotement d'une console a chaque appel de nvidia-smi / taskkill
+CREATE_NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0
 
 # ---------------------------------------------------------------------------
 # Appearance — coder base + light pop-art accents
@@ -57,24 +65,29 @@ MONO      = ("Consolas", 10) if sys.platform == "win32" else ("DejaVu Sans Mono"
 MONO_BOLD = ("Consolas", 10, "bold") if sys.platform == "win32" else ("DejaVu Sans Mono", 10, "bold")
 TITLE_FONT= ("Consolas", 12, "bold") if sys.platform == "win32" else ("DejaVu Sans Mono", 12, "bold")
 
+# Mots-cles IA : cherches dans le chemin complet du processus.
+# Les mots de 4 lettres ou moins doivent former un "mot entier" (ex. rvc, bark).
 AI_KEYWORDS = [
     "ollama", "lm studio", "lmstudio", "comfyui", "comfy", "text-generation",
     "oobabooga", "stable-diffusion", "automatic1111", "a1111", "invokeai",
     "koboldcpp", "kobold", "llama.cpp", "llama-server", "vllm", "exllama",
     "tabbyapi", "tabby", "fooocus", "sd.webui", "webui", "diffusers",
-    "transformers", "torch", "llama", "mistral", "phi-", "gemma", "qwen",
+    "transformers", "torch", "llama", "mistral", "phi", "gemma", "qwen",
     "whisper", "bark", "rvc", "sillytavern", "faraday", "gpt4all",
     "privategpt", "localai", "jan.exe", "lm-studio", "textgen", "tgw",
     "llamafile", "open-webui", "openwebui"
 ]
 
+# Applications non essentielles / critiques : comparees au NOM de l'executable
+# (sans chemin ni .exe). Mot long : debut du nom ; mot court (<= 4) : mot entier
+# eventuellement suivi de chiffres (ex. obs64).
 ORANGE_KEYWORDS = [
     "chrome", "msedge", "edge", "firefox", "opera", "brave", "vivaldi",
     "discord", "steam", "epicgames", "epic", "origin", "uplay", "ubisoft",
     "obs", "streamlabs", "nvidia share", "geforce", "spotify", "slack",
     "teams", "zoom", "telegram", "whatsapp", "signal", "blender",
     "davinci", "premiere", "afterfx", "photoshop", "illustrator",
-    "unity", "unreal", "godot", "vscode", "cursor", "code.exe",
+    "unity", "unreal", "godot", "vscode", "cursor", "code",
     "claude", "wallpaper", "msedgewebview", "webview2"
 ]
 
@@ -84,89 +97,136 @@ RED_KEYWORDS = [
     "nvidia container", "nvcontainer", "audiodg", "system",
     "smss", "services", "lsass", "svchost", "wininit", "fontdrvhost",
     "sihost", "taskhostw", "ctfmon", "securityhealth", "avast", "avg",
-    "defender", "msmpeng", "smartscreen", "conhost"
+    "avgui", "avgsvc", "defender", "msmpeng", "smartscreen", "conhost"
 ]
 
+_SHORT = 4
+
+
+def _kw_regex(k):
+    return re.compile(r"(?<![a-z0-9])" + re.escape(k) + r"(?![a-z0-9])")
+
+
+_AI_LONG = [k for k in AI_KEYWORDS if len(k) > _SHORT]
+_AI_SHORT = [_kw_regex(k) for k in AI_KEYWORDS if len(k) <= _SHORT]
+
+
+def _exe_stem(name: str) -> str:
+    base = name.replace("\\", "/").rsplit("/", 1)[-1].lower()
+    return base[:-4] if base.endswith(".exe") else base
+
+
+def _stem_match(stem: str, keys) -> bool:
+    tokens = [t for t in re.split(r"[^a-z0-9]+", stem) if t]
+    for k in keys:
+        if len(k) > _SHORT:
+            if stem.startswith(k) or any(t.startswith(k) for t in tokens):
+                return True
+        elif any(re.fullmatch(re.escape(k) + r"\d*", t) for t in tokens):
+            return True
+    return False
+
+
 def classify(name: str) -> str:
-    n = name.lower()
-    for k in AI_KEYWORDS:
-        if k in n: return "green"
-    for k in ORANGE_KEYWORDS:
-        if k in n: return "orange"
-    for k in RED_KEYWORDS:
-        if k in n: return "red"
+    path = name.lower().replace("/", "\\")
+    if any(k in path for k in _AI_LONG) or any(r.search(path) for r in _AI_SHORT):
+        return "green"
+    stem = _exe_stem(name)
+    if _stem_match(stem, RED_KEYWORDS):
+        return "red"
+    if _stem_match(stem, ORANGE_KEYWORDS):
+        return "orange"
     return "red"
 
-def run_cmd(cmd: str) -> str:
+
+def run_cmd(args):
+    """Execute une commande sans fenetre ; renvoie stdout ou None en cas d'echec."""
     try:
         r = subprocess.run(
-            cmd, shell=True, capture_output=True, text=True,
-            encoding="utf-8", errors="replace", timeout=8
+            args, capture_output=True, text=True,
+            encoding="utf-8", errors="replace", timeout=8,
+            creationflags=CREATE_NO_WINDOW
         )
-        return (r.stdout or "") + (r.stderr or "")
-    except Exception as e:
-        return str(e)
+        if r.returncode != 0:
+            return None
+        return r.stdout or ""
+    except Exception:
+        return None
 
-def check_nvidia() -> bool:
-    out = run_cmd("nvidia-smi -L")
-    return "GPU" in out or "NVIDIA" in out
 
 def get_gpu_stats():
-    out = run_cmd(
-        "nvidia-smi --query-gpu=memory.total,memory.used,memory.free,utilization.gpu "
+    """Totaux VRAM sur toutes les cartes NVIDIA ; None si nvidia-smi est indisponible."""
+    out = run_cmd([
+        "nvidia-smi",
+        "--query-gpu=memory.total,memory.used,memory.free,utilization.gpu",
         "--format=csv,noheader,nounits"
-    )
-    try:
-        parts = [p.strip() for p in out.strip().split(",")]
-        if len(parts) >= 4:
-            return {
-                "total": int(parts[0]),
-                "used":  int(parts[1]),
-                "free":  int(parts[2]),
-                "util":  int(parts[3])
-            }
-    except Exception:
-        pass
-    return None
-
-def get_gpu_processes():
-    out = run_cmd(
-        "nvidia-smi --query-compute-apps=pid,process_name,used_memory "
-        "--format=csv,noheader,nounits"
-    )
-    procs = []
-    if not out.strip() or "No running processes" in out:
-        return procs
+    ])
+    if not out:
+        return None
+    rows = []
     for line in out.strip().splitlines():
         parts = [p.strip() for p in line.split(",")]
-        if len(parts) >= 3:
-            try:
-                mem_raw = parts[2].strip()
-                if not mem_raw or "N/A" in mem_raw.upper() or "[" in mem_raw:
-                    mem_val = None
-                    mem_display = "N/A"
-                else:
-                    mem_val = int(float(mem_raw))
-                    mem_display = str(mem_val)
-                procs.append({
-                    "pid": int(parts[0]),
-                    "name": parts[1],
-                    "memory": mem_display,
-                    "memory_val": mem_val,
-                    "level": classify(parts[1])
-                })
-            except ValueError:
-                continue
+        try:
+            rows.append([int(float(x)) for x in parts[:4]])
+        except ValueError:
+            continue
+    if not rows or any(len(r) < 4 for r in rows):
+        return None
+    return {
+        "total": sum(r[0] for r in rows),
+        "used":  sum(r[1] for r in rows),
+        "free":  sum(r[2] for r in rows),
+        "util":  round(sum(r[3] for r in rows) / len(rows)),
+        "gpus":  len(rows),
+    }
+
+
+def get_gpu_processes():
+    out = run_cmd([
+        "nvidia-smi",
+        "--query-compute-apps=pid,process_name,used_memory",
+        "--format=csv,noheader,nounits"
+    ])
+    if not out or not out.strip() or "No running processes" in out:
+        return []
+    merged = {}
+    for line in out.strip().splitlines():
+        # le nom du processus peut contenir des virgules : pid au debut, memoire a la fin
+        try:
+            head, mem_raw = line.rsplit(",", 1)
+            pid_raw, name = head.split(",", 1)
+            pid = int(pid_raw.strip())
+        except ValueError:
+            continue
+        name = name.strip()
+        mem_raw = mem_raw.strip()
+        try:
+            mem_val = None if (not mem_raw or "N/A" in mem_raw.upper() or "[" in mem_raw) \
+                else int(float(mem_raw))
+        except ValueError:
+            mem_val = None
+        if pid in merged:  # meme PID sur plusieurs cartes : on additionne
+            old = merged[pid]["memory_val"]
+            if mem_val is not None:
+                merged[pid]["memory_val"] = (old or 0) + mem_val
+        else:
+            merged[pid] = {"pid": pid, "name": name, "memory_val": mem_val,
+                           "level": classify(name)}
+    procs = list(merged.values())
+    for p in procs:
+        p["memory"] = "N/A" if p["memory_val"] is None else str(p["memory_val"])
     # Known memory first (desc), then N/A
     procs.sort(key=lambda p: (p["memory_val"] is None, -(p["memory_val"] or 0)))
     return procs
+
 
 def kill_pid(pid: int) -> bool:
     try:
         if sys.platform == "win32":
             r = subprocess.run(
                 ["taskkill", "/F", "/PID", str(pid)],
-                capture_output=True, text=True
+                capture_output=True, text=True,
+                creationflags=CREATE_NO_WINDOW
             )
             return r.returncode == 0
         else:
@@ -174,6 +234,7 @@ def kill_pid(pid: int) -> bool:
             return True
     except Exception:
         return False
+
 
 def mem_label(p, total=None):
     if p["memory"] == "N/A" or p["memory_val"] is None:
@@ -185,10 +246,25 @@ def mem_label(p, total=None):
     return mib, "—"
 
 
-class VRAMCleanerApp(tk.Tk):
+def find_resource(name):
+    """Cherche un fichier d'assets : EXE (PyInstaller), dossier assets/ ou dossier du script."""
+    dirs = []
+    if getattr(sys, "frozen", False):
+        dirs.append(getattr(sys, "_MEIPASS", os.path.dirname(sys.executable)))
+        dirs.append(os.path.dirname(sys.executable))
+    here = os.path.dirname(os.path.abspath(__file__))
+    dirs += [os.path.join(here, "..", "assets"), here]
+    for d in dirs:
+        p = os.path.abspath(os.path.join(d, name))
+        if os.path.isfile(p):
+            return p
+    return None
+
+
+class VRAMZeroApp(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title(f"VRAM Cleaner  v{VERSION}  —  by CycleBlue")
+        self.title(f"{APP_NAME}  v{VERSION}  —  by {AUTHOR}")
         self.configure(bg=BG)
         self.geometry("780x580")
         self.minsize(680, 480)
@@ -204,44 +280,25 @@ class VRAMCleanerApp(tk.Tk):
         self.gpu_total = None
         self.show_critical = False
         self._auto_job = None
+        self._poll_job = None
+        self._busy = False
+        self._again = False
+        self._rows = None
+        self._results = queue.Queue()
         self._build_ui()
-        self.refresh()
-        self._start_auto_refresh()
+        self._poll_results()
+        self._auto_tick()
 
     def _try_set_icon(self):
         """Charge l'icone fenetre / barre des taches si presente."""
-        base = os.path.dirname(os.path.abspath(__file__))
-        # PyInstaller: fichiers a cote de l'exe
-        if getattr(sys, "frozen", False):
-            base = os.path.dirname(sys.executable)
-
-        ico_names = ("vram_cleaner.ico", "icon.ico", "favicon.ico")
-        png_names = ("vram_cleaner.png", "icon.png", "favicon.png", "logo.png")
-
-        for name in ico_names:
-            path_ico = os.path.join(base, name)
-            if os.path.isfile(path_ico):
-                try:
-                    self.iconbitmap(default=path_ico)
-                    self.iconbitmap(path_ico)
-                    return
-                except Exception:
-                    try:
-                        self.iconbitmap(path_ico)
-                        return
-                    except Exception:
-                        pass
-
-        for name in png_names:
-            path_png = os.path.join(base, name)
-            if os.path.isfile(path_png):
-                try:
-                    img = tk.PhotoImage(file=path_png)
-                    self.iconphoto(True, img)
-                    self._icon_ref = img  # garder la reference
-                    return
-                except Exception:
-                    pass
+        path = find_resource("vram_zero.ico")
+        if not path:
+            return
+        try:
+            self.iconbitmap(default=path)
+            self.iconbitmap(path)
+        except Exception:
+            pass
 
     def _build_ui(self):
         header = tk.Frame(self, bg=BG)
@@ -249,9 +306,9 @@ class VRAMCleanerApp(tk.Tk):
 
         title_frame = tk.Frame(header, bg=BG)
         title_frame.pack(side="left")
-        tk.Label(title_frame, text=f"VRAM Cleaner  v{VERSION}", font=TITLE_FONT,
+        tk.Label(title_frame, text=f"{APP_NAME}  v{VERSION}", font=TITLE_FONT,
                  bg=BG, fg=ACCENT).pack(side="left")
-        tk.Label(title_frame, text="  ·  CycleBlue", font=MONO,
+        tk.Label(title_frame, text=f"  ·  {AUTHOR}", font=MONO,
                  bg=BG, fg=DIM).pack(side="left")
 
         right = tk.Frame(header, bg=BG)
@@ -426,7 +483,7 @@ class VRAMCleanerApp(tk.Tk):
             self.show_critical = False
             self.filter_label.config(text="Filtre : IA et applications non essentielles")
             self.set_status("Processus critiques masqués")
-            self._rebuild_tree()
+            self._rebuild_tree(force=True)
             self._update_info()
             return
         ok = messagebox.askyesno(
@@ -442,7 +499,7 @@ class VRAMCleanerApp(tk.Tk):
         self.show_critical = True
         self.filter_label.config(text="Filtre : tous les processus")
         self.set_status("Processus critiques visibles")
-        self._rebuild_tree()
+        self._rebuild_tree(force=True)
         self._update_info()
 
     def _redraw_bar(self):
@@ -489,7 +546,6 @@ class VRAMCleanerApp(tk.Tk):
         if fill_w > 1:
             c.create_line(fill_w - 1, 0, fill_w - 1, h, fill="#e6edf3", width=1)
 
-
     def _update_stats_bar(self, stats):
         if not stats:
             self.vram_var.set("VRAM  — / — MiB   (— %)")
@@ -502,31 +558,74 @@ class VRAMCleanerApp(tk.Tk):
         used = stats["used"]
         pct = round(used / total * 100) if total else 0
         self.gpu_total = total
-        self.vram_var.set(f"VRAM  {used} / {total} MiB   ({pct} %)")
+        gpus = f"   [{stats['gpus']} GPU]" if stats.get("gpus", 1) > 1 else ""
+        self.vram_var.set(f"VRAM  {used} / {total} MiB   ({pct} %){gpus}")
         self.util_var.set(f"GPU   {stats['util']} %")
         self._bar_pct = pct
         self._redraw_bar()
 
-    def _rebuild_tree(self):
+    def _rebuild_tree(self, force=False):
+        """Reconstruit le tableau seulement si les donnees changent, en gardant la selection."""
+        visible = self._visible_processes()
+        rows = [(p["pid"], *mem_label(p, self.gpu_total), p["name"], p["level"])
+                for p in visible]
+        if not force and rows == self._rows:
+            return
+        self._rows = rows
+        selected = set()
+        for item in self.tree.selection():
+            vals = self.tree.item(item, "values")
+            if vals:
+                selected.add(int(vals[1]))
+        top = self.tree.yview()[0]
         self.tree.delete(*self.tree.get_children())
-        for p in self._visible_processes():
-            mib, share = mem_label(p, self.gpu_total)
-            self.tree.insert("", "end",
-                values=("●", p["pid"], mib, share, p["name"]),
-                tags=(p["level"],))
+        keep = []
+        for pid, mib, share, name, level in rows:
+            iid = self.tree.insert("", "end",
+                values=("●", pid, mib, share, name), tags=(level,))
+            if pid in selected:
+                keep.append(iid)
+        if keep:
+            self.tree.selection_set(keep)
+        self.tree.yview_moveto(top)
+
+    # -- Actualisation en arriere-plan (l'interface ne se bloque plus) --------
 
     def refresh(self):
-        stats = get_gpu_stats()
-        self._update_stats_bar(stats)
-        self.processes = []
+        if self._busy:
+            self._again = True  # une actualisation sera relancee des que possible
+            return
+        self._busy = True
+        threading.Thread(target=self._worker, daemon=True).start()
 
-        if not check_nvidia():
-            self.tree.delete(*self.tree.get_children())
+    def _worker(self):
+        stats = get_gpu_stats()
+        procs = get_gpu_processes() if stats else []
+        self._results.put((stats, procs))
+
+    def _poll_results(self):
+        try:
+            stats, procs = self._results.get_nowait()
+        except queue.Empty:
+            pass
+        else:
+            self._busy = False
+            self._apply(stats, procs)
+            if self._again:
+                self._again = False
+                self.refresh()
+        self._poll_job = self.after(100, self._poll_results)
+
+    def _apply(self, stats, procs):
+        self._update_stats_bar(stats)
+        if stats is None:
+            self.processes = []
+            self._rebuild_tree()
             self.set_status("nvidia-smi introuvable")
             self.info_var.set("Les pilotes NVIDIA sont absents ou nvidia-smi n'est pas dans le PATH.")
             return
 
-        self.processes = get_gpu_processes()
+        self.processes = procs
         self._rebuild_tree()
 
         if not self.processes:
@@ -537,16 +636,16 @@ class VRAMCleanerApp(tk.Tk):
         self.set_status(f"{len(self._visible_processes())} processus affichés")
         self._update_info()
 
-
-
-    def _start_auto_refresh(self):
+    def _auto_tick(self):
         self.refresh()
-        self._auto_job = self.after(AUTO_REFRESH_MS, self._start_auto_refresh)
+        self._auto_job = self.after(AUTO_REFRESH_MS, self._auto_tick)
 
     def _stop_auto_refresh(self):
-        if self._auto_job:
-            self.after_cancel(self._auto_job)
-            self._auto_job = None
+        for attr in ("_auto_job", "_poll_job"):
+            job = getattr(self, attr)
+            if job:
+                self.after_cancel(job)
+                setattr(self, attr, None)
 
     def _selected(self):
         out = []
@@ -562,7 +661,7 @@ class VRAMCleanerApp(tk.Tk):
 
     def _kill(self, targets, label):
         if not targets:
-            messagebox.showinfo("VRAM Cleaner", "Aucun processus à terminer.")
+            messagebox.showinfo(APP_NAME, "Aucun processus à terminer.")
             return
 
         critical = [p for p in targets if p["level"] == "red"]
@@ -622,11 +721,11 @@ class VRAMCleanerApp(tk.Tk):
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         lines = [
             "=" * 60,
-            "VRAM CLEANER — by CycleBlue",
+            f"{APP_NAME.upper()} — by {AUTHOR}",
             "Rapport d'occupation GPU",
             "=" * 60,
             f"Date                : {now}",
-            f"Version             : VRAM Cleaner v{VERSION}",
+            f"Version             : {APP_NAME} v{VERSION}",
             "Source des données  : nvidia-smi (outil officiel NVIDIA)",
             "Commandes utilisées :",
             "  - nvidia-smi --query-gpu=memory.total,memory.used,memory.free,utilization.gpu",
@@ -671,7 +770,7 @@ class VRAMCleanerApp(tk.Tk):
     def show_help(self):
         content = (
             "PRESENTATION\n"
-            "VRAM Cleaner permet de surveiller l'occupation de la mémoire vidéo\n"
+            f"{APP_NAME} permet de surveiller l'occupation de la mémoire vidéo\n"
             "(VRAM) d'une carte graphique NVIDIA et de terminer les processus\n"
             "qui l'utilisent, en particulier les modèles d'intelligence\n"
             "artificielle exécutés localement.\n\n"
@@ -701,10 +800,10 @@ class VRAMCleanerApp(tk.Tk):
 
     def show_about(self):
         content = (
-            f"VRAM Cleaner  version {VERSION}\n"
-            "by CycleBlue\n\n"
+            f"{APP_NAME}  version {VERSION}\n"
+            f"by {AUTHOR}\n\n"
             "DESCRIPTION\n"
-            "VRAM Cleaner est un utilitaire léger destiné à faciliter la gestion\n"
+            f"{APP_NAME} est un utilitaire léger destiné à faciliter la gestion\n"
             "de la mémoire vidéo (VRAM) sur les systèmes équipés d'une carte\n"
             "graphique NVIDIA. Il s'adresse principalement aux utilisateurs\n"
             "exécutant des modèles d'intelligence artificielle en local.\n\n"
@@ -714,7 +813,7 @@ class VRAMCleanerApp(tk.Tk):
             "  • Terminaison contrôlée des processus sélectionnés\n"
             "  • Filtre de sécurité masquant les processus critiques\n"
             "  • Export de rapports détaillés\n"
-            "  • Aucune installation, aucune connexion réseau, aucune persistance\n\n"
+            "  • Aucune connexion réseau, aucune donnée enregistrée\n\n"
             "TECHNOLOGIE\n"
             "L'application s'appuie exclusivement sur nvidia-smi (outil officiel\n"
             "NVIDIA) et sur les modules standard de Python.\n\n"
@@ -726,21 +825,34 @@ class VRAMCleanerApp(tk.Tk):
             "terminer. La terminaison de processus système peut entraîner une\n"
             "instabilité du système d'exploitation."
         )
-        self._text_window("À propos", content)
+        self._text_window("À propos", content, image="vram_zero_popart.png")
 
-    def _text_window(self, title, content):
+    def _text_window(self, title, content, image=None):
+        photo = None
+        if image:
+            path = find_resource(image)
+            if path:
+                try:
+                    photo = tk.PhotoImage(file=path).subsample(2)  # 256 px -> 128 px
+                except Exception:
+                    photo = None
+
         win = tk.Toplevel(self)
         win.title(title)
         win.configure(bg=BG)
-        win.geometry("540x540")
+        win.geometry("540x" + ("700" if photo else "540"))
         win.resizable(False, False)
         win.transient(self)
         win.grab_set()
         win.update_idletasks()
-        win.geometry(f"+{self.winfo_x() + 80}+{self.winfo_y() + 30}")
+        win.geometry(f"+{self.winfo_x() + 80}+{self.winfo_y() + 10}")
 
         tk.Label(win, text=title, font=TITLE_FONT,
                  bg=BG, fg=ACCENT).pack(anchor="w", padx=16, pady=(14, 8))
+        if photo:
+            lbl = tk.Label(win, image=photo, bg=BG, bd=0)
+            lbl.image = photo  # garder la reference
+            lbl.pack(pady=(0, 6))
         txt = tk.Text(
             win, font=MONO, bg=BG, fg=FG, relief="flat",
             wrap="word", highlightthickness=0, padx=4, pady=4
@@ -767,4 +879,4 @@ if __name__ == "__main__":
                 ctypes.windll.kernel32.GetConsoleWindow(), 0)
         except Exception:
             pass
-    VRAMCleanerApp().mainloop()
+    VRAMZeroApp().mainloop()

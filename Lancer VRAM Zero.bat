@@ -1,11 +1,11 @@
 @echo off
 cd /d "%~dp0"
-title VRAM Cleaner
+title VRAM Zero
 
-if not exist "%~dp0vram_cleaner.pyw" (
+if not exist "%~dp0src\vram_zero.pyw" (
     echo.
-    echo  [Erreur] Fichier vram_cleaner.pyw introuvable.
-    echo  Placez ce .bat dans le meme dossier que vram_cleaner.pyw
+    echo  [Erreur] Fichier src\vram_zero.pyw introuvable.
+    echo  Ne deplacez pas ce .bat hors du dossier VRAM_Zero.
     echo.
     pause
     exit /b 1
@@ -13,13 +13,13 @@ if not exist "%~dp0vram_cleaner.pyw" (
 
 where pythonw >nul 2>&1
 if %errorlevel% equ 0 (
-    start "" /B pythonw "%~dp0vram_cleaner.pyw"
+    start "" pythonw "%~dp0src\vram_zero.pyw"
     exit /b 0
 )
 
 where python >nul 2>&1
 if %errorlevel% equ 0 (
-    start "" /B python "%~dp0vram_cleaner.pyw"
+    start "" python "%~dp0src\vram_zero.pyw"
     exit /b 0
 )
 
